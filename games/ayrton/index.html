@@ -1,21 +1,361 @@
+
 <!DOCTYPE html>
-<html lang="et">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ayrton — mäng</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; font-family: system-ui, sans-serif; background: #0a0e12; color: #e8f0ff; display: grid; place-items: center; padding: 1.5rem; }
-    a { color: #5eead4; }
-    .box { text-align: center; max-width: 28rem; line-height: 1.6; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cookie Clicker 🍪</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #21150f;
+  color: #fff0d5;
+  text-align: center;
+}
+
+header {
+  background: #422719;
+  padding: 20px;
+  border-bottom: 3px solid #70472e;
+}
+
+h1 { color: #ffd27d; margin: 0 0 8px; }
+
+main {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 30px;
+  padding: 25px 15px;
+}
+
+.game, .shop {
+  width: min(100%, 360px);
+  background: #352116;
+  border: 2px solid #70472e;
+  border-radius: 18px;
+  padding: 22px;
+}
+
+#count {
+  font-size: 36px;
+  color: #ffd27d;
+  font-weight: bold;
+  overflow-wrap: anywhere;
+}
+
+#cps { color: #d6b69a; margin-bottom: 20px; }
+
+#cookie {
+  font-size: 145px;
+  cursor: pointer;
+  user-select: none;
+  display: inline-block;
+  transition: transform 0.08s;
+  filter: drop-shadow(0 8px 4px #170d08);
+}
+
+#cookie:active { transform: scale(0.88) rotate(-8deg); }
+
+.bounce { animation: bounce 0.2s; }
+
+@keyframes bounce {
+  50% { transform: scale(1.12) rotate(5deg); }
+}
+
+.shop h2 { color: #ffd27d; }
+
+.upgrade {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #4b3020;
+  padding: 12px;
+  margin: 12px 0;
+  border-radius: 12px;
+  text-align: left;
+}
+
+.upgrade .emoji { font-size: 35px; }
+
+.info { flex: 1; min-width: 0; }
+.info strong { display: block; }
+.info small { color: #d6b69a; }
+
+button {
+  background: #ffd27d;
+  color: #352116;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover { background: #ffb943; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+#golden {
+  position: fixed;
+  display: none;
+  z-index: 10;
+  font-size: 65px;
+  cursor: pointer;
+  filter: drop-shadow(0 0 15px gold);
+  animation: goldPulse 0.7s infinite alternate;
+}
+
+@keyframes goldPulse {
+  to { transform: scale(1.15) rotate(12deg); }
+}
+
+#message {
+  min-height: 24px;
+  color: #ffd27d;
+  margin-top: 12px;
+}
+
+.stats { color: #d6b69a; font-size: 13px; }
+footer { padding: 15px; color: #bda18a; }
+</style>
 </head>
+
 <body>
-  <div class="box">
-    <h1>Ayrton</h1>
-    <p>Siia tuleb sinu mäng. Asenda see fail või lisa siia oma HTML/CSS/JS.</p>
-    <p><a href="../../index.html">← tagasi dashboardile</a></p>
-  </div>
+<header>
+  <h1>🍪 Cookie Clicker</h1>
+  Bake cookies. Buy upgrades. Become a cookie legend.
+</header>
+
+<main>
+  <section class="game">
+    <div id="count">0 cookies</div>
+    <div id="cps">0 cookies per second</div>
+
+    <div id="cookie" title="Click me!">🍪</div>
+
+    <p>Click the cookie to bake!</p>
+    <div id="message">Welcome to your bakery!</div>
+
+    <p class="stats">
+      Total baked: <span id="total">0</span><br>
+      Click power: <span id="power">1</span>
+    </p>
+
+    <button onclick="resetGame()">Reset Game</button>
+  </section>
+
+  <section class="shop">
+    <h2>🏪 Cookie Shop</h2>
+    <div id="upgrades"></div>
+  </section>
+</main>
+
+<div id="golden" title="Click for a bonus!">🌟</div>
+
+<footer>Your bakery automatically saves your progress.</footer>
+
+<script>
+const cookie = document.getElementById("cookie");
+const golden = document.getElementById("golden");
+
+const items = [
+  { name: "Better Click", emoji: "👆", desc: "+1 cookie per click",
+    base: 25, owned: 0, type: "click" },
+  { name: "Grandma", emoji: "👵", desc: "+1 cookie per second",
+    base: 50, owned: 0, type: "auto" },
+  { name: "Cookie Farm", emoji: "🌾", desc: "+5 cookies per second",
+    base: 200, owned: 0, type: "farm" },
+  { name: "Cookie Factory", emoji: "🏭", desc: "+20 cookies per second",
+    base: 1000, owned: 0, type: "factory" }
+];
+
+let cookies = 0;
+let total = 0;
+let power = 1;
+let cps = 0;
+let goldenTimeout;
+let lastSave = Date.now();
+
+function cost(item) {
+  return Math.floor(item.base * Math.pow(1.5, item.owned));
+}
+
+function format(n) {
+  return Math.floor(n).toLocaleString();
+}
+
+function renderShop() {
+  document.getElementById("upgrades").innerHTML =
+    items.map((item, i) => `
+      <div class="upgrade">
+        <span class="emoji">${item.emoji}</span>
+        <div class="info">
+          <strong>${item.name}</strong>
+          <small>${item.desc}</small>
+          <small>Owned: ${item.owned}</small>
+          <small>Price: ${format(cost(item))} 🍪</small>
+        </div>
+        <button onclick="buy(${i})"
+          ${cookies < cost(item) ? "disabled" : ""}>
+          Buy
+        </button>
+      </div>
+    `).join("");
+}
+
+function update() {
+  document.getElementById("count").textContent =
+    format(cookies) + " cookies";
+  document.getElementById("cps").textContent =
+    format(cps) + " cookies per second";
+  document.getElementById("total").textContent = format(total);
+  document.getElementById("power").textContent = power;
+
+  renderShop();
+}
+
+function addCookies(amount) {
+  cookies += amount;
+  total += amount;
+}
+
+cookie.addEventListener("click", () => {
+  addCookies(power);
+
+  cookie.classList.remove("bounce");
+  void cookie.offsetWidth;
+  cookie.classList.add("bounce");
+
+  update();
+});
+
+function buy(i) {
+  const item = items[i];
+  const price = cost(item);
+
+  if (cookies < price) return;
+
+  cookies -= price;
+  item.owned++;
+
+  if (item.type === "click") power++;
+  if (item.type === "auto") cps++;
+  if (item.type === "farm") cps += 5;
+  if (item.type === "factory") cps += 20;
+
+  document.getElementById("message").textContent =
+    item.name + " purchased!";
+
+  update();
+  saveGame();
+}
+
+function spawnGolden() {
+  golden.style.left = (5 + Math.random() * 80) + "vw";
+  golden.style.top = (15 + Math.random() * 60) + "vh";
+  golden.style.display = "block";
+
+  clearTimeout(goldenTimeout);
+  goldenTimeout = setTimeout(() => {
+    golden.style.display = "none";
+  }, 6000);
+}
+
+golden.addEventListener("click", () => {
+  const bonus = Math.max(25, cps * 30, power * 10);
+  addCookies(bonus);
+  golden.style.display = "none";
+
+  document.getElementById("message").textContent =
+    "✨ Golden bonus! +" + format(bonus) + " cookies!";
+
+  update();
+});
+
+function saveGame() {
+  const data = { cookies, total, power, items };
+  try {
+    localStorage.setItem("cookieClickerSave", JSON.stringify(data));
+  } catch (e) {
+    console.warn("Could not save game.", e);
+  }
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem("cookieClickerSave");
+    if (!raw) return;
+
+    const data = JSON.parse(raw);
+
+    if (!Array.isArray(data.items) ||
+        !Number.isFinite(data.cookies) ||
+        !Number.isFinite(data.total) ||
+        !Number.isFinite(data.power)) return;
+
+    cookies = Math.max(0, data.cookies);
+    total = Math.max(0, data.total);
+    power = Math.max(1, data.power);
+
+    data.items.forEach((saved, i) => {
+      if (items[i] && Number.isFinite(saved.owned)) {
+        items[i].owned = Math.max(0, Math.floor(saved.owned));
+      }
+    });
+
+    // Recalculate production from purchased upgrades.
+    cps = items.reduce((sum, item) => {
+      if (item.type === "auto") return sum + item.owned;
+      if (item.type === "farm") return sum + item.owned * 5;
+      if (item.type === "factory") return sum + item.owned * 20;
+      return sum;
+    }, 0);
+
+    power = 1 + items.find(item => item.type === "click").owned;
+  } catch (e) {
+    console.warn("Could not load save.", e);
+  }
+}
+
+function resetGame() {
+  if (!confirm("Delete your progress and start over?")) return;
+
+  cookies = 0;
+  total = 0;
+  power = 1;
+  cps = 0;
+  items.forEach(item => item.owned = 0);
+
+  localStorage.removeItem("cookieClickerSave");
+  document.getElementById("message").textContent = "Fresh start!";
+  update();
+}
+
+loadGame();
+update();
+
+// Produce cookies and save progress.
+setInterval(() => {
+  if (cps > 0) addCookies(cps / 10);
+  update();
+}, 100);
+
+// Save every few seconds.
+setInterval(saveGame, 3000);
+
+// Golden cookies appear randomly.
+function scheduleGolden() {
+  setTimeout(() => {
+    spawnGolden();
+    scheduleGolden();
+  }, 15000 + Math.random() * 15000);
+}
+
+scheduleGolden();
+</script>
 </body>
 </html>
